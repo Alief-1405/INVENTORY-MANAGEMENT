@@ -8,7 +8,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 interface PageProps {
-  searchParams: Promise<{ supplierId?: string; amount?: string }>;
+  searchParams: Promise<{ supplierId?: string; amount?: string; productId?: string }>;
 }
 
 export default async function PurchaseOrdersPage({ searchParams }: PageProps) {
@@ -20,6 +20,7 @@ export default async function PurchaseOrdersPage({ searchParams }: PageProps) {
   const resolvedParams = await searchParams;
   const defaultSupplierId = resolvedParams.supplierId || "";
   const defaultAmount = resolvedParams.amount || "";
+  const defaultProductId = resolvedParams.productId || "";
 
   const userRole = session.role;
   const isPurchasingOrAdmin = userRole === "PURCHASING" || userRole === "SUPERADMIN";
@@ -31,6 +32,11 @@ export default async function PurchaseOrdersPage({ searchParams }: PageProps) {
   // Fetch suppliers list for mock creation form
   const suppliers = await prisma.supplier.findMany({
     select: { id: true, name: true }
+  });
+
+  // Fetch products list for dropdown
+  const products = await prisma.product.findMany({
+    select: { id: true, name: true, sku: true }
   });
 
   // Jika belum ada supplier di database, buatkan satu otomatis untuk testing
@@ -54,12 +60,15 @@ export default async function PurchaseOrdersPage({ searchParams }: PageProps) {
     const supplierId = formData.get("supplierId") as string;
     const amountStr = formData.get("amount") as string;
     const amount = Number(amountStr);
+    const productId = formData.get("productId") as string;
+    const quantityStr = formData.get("quantity") as string;
+    const quantity = quantityStr ? Number(quantityStr) : 50;
 
     if (!supplierId || isNaN(amount) || amount <= 0) {
       return;
     }
 
-    await createPurchaseOrder(supplierId, amount);
+    await createPurchaseOrder(supplierId, amount, productId || undefined, quantity);
     revalidatePath("/purchase-orders");
   }
 
@@ -117,6 +126,39 @@ export default async function PurchaseOrdersPage({ searchParams }: PageProps) {
                     placeholder="Contoh: 12500000"
                     className="w-full py-2.5 px-3 bg-white/80 dark:bg-zinc-950 border border-slate-200/80 dark:border-zinc-800 rounded-xl text-xs font-semibold text-slate-800 dark:text-zinc-200 outline-none"
                     defaultValue={defaultAmount}
+                    required
+                  />
+                </div>
+
+                {/* Pilih Produk (Opsional / Terkait Restock) */}
+                <div className="space-y-1.5">
+                  <label htmlFor="productId" className="text-xs font-bold text-slate-500">Pilih Produk Restock (Opsional)</label>
+                  <select
+                    id="productId"
+                    name="productId"
+                    className="w-full py-2.5 px-3 bg-white/80 dark:bg-zinc-950 border border-slate-200/80 dark:border-zinc-800 rounded-xl text-xs font-semibold text-slate-800 dark:text-zinc-200 outline-none cursor-pointer"
+                    defaultValue={defaultProductId}
+                  >
+                    <option value="">-- Hubungkan dengan Produk --</option>
+                    {products.map((prod) => (
+                      <option key={prod.id} value={prod.id}>
+                        {prod.name} ({prod.sku})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Kuantitas Restock */}
+                <div className="space-y-1.5">
+                  <label htmlFor="quantity" className="text-xs font-bold text-slate-500">Kuantitas Restock</label>
+                  <input
+                    id="quantity"
+                    name="quantity"
+                    type="number"
+                    min="1"
+                    placeholder="Contoh: 50"
+                    className="w-full py-2.5 px-3 bg-white/80 dark:bg-zinc-950 border border-slate-200/80 dark:border-zinc-800 rounded-xl text-xs font-semibold text-slate-800 dark:text-zinc-200 outline-none"
+                    defaultValue={50}
                     required
                   />
                 </div>

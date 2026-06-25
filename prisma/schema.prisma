@@ -82,6 +82,7 @@ model Product {
   updatedAt   DateTime @updatedAt
 
   movements   StockMovement[]
+  purchaseOrders PurchaseOrder[]
 
   @@index([sku])
   @@index([name])
@@ -149,9 +150,14 @@ model PurchaseOrder {
   approvedById String?
   approvedBy   User?         @relation("POApprover", fields: [approvedById], references: [id], onDelete: SetNull)
 
+  productId    String?
+  product      Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+  quantity     Int           @default(50)
+
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
   @@index([status])
   @@index([supplierId])
+  @@index([productId])
 }

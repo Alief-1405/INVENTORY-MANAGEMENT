@@ -2,7 +2,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { Package, ArrowRightLeft, LayoutDashboard, Settings, Loader2, FileText } from "lucide-react"
+import { Package, ArrowRightLeft, LayoutDashboard, Settings, Loader2, FileText, Truck } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
   { title: "Produk", href: "/products", icon: Package },
   { title: "Mutasi Stok", href: "/movements", icon: ArrowRightLeft },
   { title: "Purchase Order", href: "/purchase-orders", icon: FileText, allowedRoles: ["PURCHASING", "MANAGER", "SUPERADMIN"] },
+  { title: "Pelacakan Pengadaan", href: "/procurement-tracking", icon: Truck, allowedRoles: ["GUDANG", "SUPERADMIN"] },
   { title: "Pengaturan", href: "/settings", icon: Settings, allowedRoles: ["SUPERADMIN"] },
 ]
 

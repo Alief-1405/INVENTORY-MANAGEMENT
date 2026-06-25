@@ -122,8 +122,8 @@ export default function PurchasingDashboard({ stats }: PurchasingDashboardProps)
                     // Kalkulasi restock quantity (misal: restock 50 unit)
                     const restockAmount = Number(prod.buyPrice) * 50;
                     const queryParams = prod.supplierId 
-                      ? `?supplierId=${prod.supplierId}&amount=${restockAmount}` 
-                      : `?amount=${restockAmount}`;
+                      ? `?supplierId=${prod.supplierId}&amount=${restockAmount}&productId=${prod.id}` 
+                      : `?amount=${restockAmount}&productId=${prod.id}`;
 
                     return (
                       <tr key={prod.id} className="hover:bg-slate-50/70 dark:hover:bg-zinc-900/40 transition-colors">
