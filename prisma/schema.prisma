@@ -9,8 +9,11 @@ datasource db {
 }
 
 enum Role {
-  ADMIN
-  STAFF
+  SUPERADMIN
+  PURCHASING
+  SALES
+  GUDANG
+  MANAGER
 }
 
 enum MovementType {
@@ -24,11 +27,12 @@ model User {
   email     String   @unique
   name      String
   password  String
-  role      Role     @default(STAFF)
+  role      Role     @default(GUDANG)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   movements StockMovement[]
+  auditLogs AuditLog[]
 }
 
 model Category {
@@ -104,4 +108,17 @@ model SystemSetting {
   key       String   @id
   value     String?
   updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  details   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
 }

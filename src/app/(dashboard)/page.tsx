@@ -44,6 +44,19 @@ export default function DashboardPage() {
     refetchOnWindowFocus: true
   })
 
+  // Query data profil user untuk mengecek role di client-side
+  const { data: profileRes } = useQuery<{ id: string; name: string; email: string; role: string }>({
+    queryKey: ["user-profile"],
+    queryFn: async () => {
+      const res = await fetch("/api/user/profile");
+      if (!res.ok) throw new Error("Gagal mengambil profil.");
+      const json = await res.json();
+      return json.data;
+    }
+  });
+
+  const showAssetCard = profileRes?.role === "MANAGER" || profileRes?.role === "SUPERADMIN";
+
   if (isLoading) {
     return (
       <div className="flex h-[75vh] flex-col items-center justify-center gap-3">
@@ -94,7 +107,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Baris Pertama: Kartu Metrik Utama */}
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className={`grid gap-6 ${showAssetCard ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
         {/* Card 1: Total Produk - Aksen Ungu Pastel */}
         <Card className="hover:shadow-md transition-all duration-300 border border-white/40 border-l-4 border-l-purple-400 bg-white/60 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -130,22 +143,24 @@ export default function DashboardPage() {
         </Card>
 
         {/* Card 3: Nilai Total Aset - Aksen Off-White Hangat */}
-        <Card className="hover:shadow-md transition-all duration-300 border border-white/40 border-l-4 border-l-[#ECE7DC] bg-white/60 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-500">Nilai Total Aset</CardTitle>
-            <div className="rounded-xl bg-amber-50 p-2 dark:bg-amber-950/20 shadow-xs">
-              <DollarSign className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-extrabold tracking-tight text-[#0B132B] dark:text-white">
-              {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(totalAssetValue)}
-            </div>
-            <p className="text-xs text-slate-400 mt-1.5 font-medium">
-              Estimasi total harga jual stok di gudang.
-            </p>
-          </CardContent>
-        </Card>
+        {showAssetCard && (
+          <Card className="hover:shadow-md transition-all duration-300 border border-white/40 border-l-4 border-l-[#ECE7DC] bg-white/60 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-500">Nilai Total Aset</CardTitle>
+              <div className="rounded-xl bg-amber-50 p-2 dark:bg-amber-950/20 shadow-xs">
+                <DollarSign className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-extrabold tracking-tight text-[#0B132B] dark:text-white">
+                {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(totalAssetValue)}
+              </div>
+              <p className="text-xs text-slate-400 mt-1.5 font-medium">
+                Estimasi total harga jual stok di gudang.
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Baris Kedua: Visualisasi Grafik */}

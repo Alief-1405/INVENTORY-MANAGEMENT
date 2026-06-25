@@ -15,7 +15,7 @@ export default async function DashboardLayout({
       {/* Deteksi Idle Timeout Global (15 Menit) */}
       <IdleTimeout timeoutMinutes={15} />
       
-      <Sidebar />
+      <Sidebar role={session?.role} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header userName={session?.name || "User"} />
         <main className="flex-1 overflow-y-auto bg-[#FAF9F5] p-8 dark:bg-zinc-900/50 transition-all duration-300">

@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { getSession } from "@/lib/auth";
+import { requireServerRole } from "@/lib/rbac";
 
 const stockMovementSchema = z.object({
   productId: z.string().uuid("ID Produk tidak valid"),
@@ -14,13 +14,9 @@ const stockMovementSchema = z.object({
 
 export async function createStockMovement(formData: z.infer<typeof stockMovementSchema>) {
   try {
+    const session = await requireServerRole("GUDANG", "SUPERADMIN");
     const validatedData = stockMovementSchema.parse(formData);
     const { productId, type, quantity, reason } = validatedData;
-
-    const session = await getSession();
-    if (!session || !session.id) {
-      return { success: false, message: "Sesi tidak valid, harap login kembali." };
-    }
 
     const result = await prisma.$transaction(async (tx) => {
       // 1. Lock baris produk untuk mencegah race condition (hanya jalan di Postgres)
@@ -62,6 +58,15 @@ export async function createStockMovement(formData: z.infer<typeof stockMovement
       const updatedProduct = await tx.product.update({
         where: { id: productId },
         data: { stock: newStock },
+      });
+
+      // 5. Catat Audit Log
+      await tx.auditLog.create({
+        data: {
+          userId: session.id,
+          action: "UPDATE_STOCK",
+          details: `Mutasi stok ${type}: Kuantitas ${quantity}. Stok "${product.name}" (${productId}) berubah dari ${product.stock} menjadi ${newStock}. Alasan: ${reason || "-"}`,
+        },
       });
 
       return { movement, updatedProduct };

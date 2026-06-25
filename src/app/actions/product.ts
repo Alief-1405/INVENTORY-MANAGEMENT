@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { requireServerRole } from "@/lib/rbac";
 
 const productSchema = z.object({
   sku: z.string().min(2, "SKU minimal 2 karakter"),
@@ -170,6 +171,7 @@ export async function getDashboardStats() {
 // Server Action untuk membuat produk baru
 export async function createProduct(formData: z.infer<typeof productSchema>) {
   try {
+    await requireServerRole("GUDANG", "SUPERADMIN");
     const validatedData = productSchema.parse(formData);
     const { sku, name, sellPrice, stock, minStock } = validatedData;
 
@@ -217,6 +219,7 @@ export async function createProduct(formData: z.infer<typeof productSchema>) {
 // Server Action untuk memperbarui produk
 export async function updateProduct(id: string, formData: Partial<z.infer<typeof productSchema>>) {
   try {
+    await requireServerRole("GUDANG", "SUPERADMIN");
     // Validasi data masukan secara parsial
     const validatedData = productSchema.partial().parse(formData);
 
@@ -259,6 +262,7 @@ export async function updateProduct(id: string, formData: Partial<z.infer<typeof
 // Server Action untuk menghapus produk
 export async function deleteProduct(id: string) {
   try {
+    await requireServerRole("GUDANG", "SUPERADMIN");
     const product = await prisma.product.findUnique({ where: { id } });
     if (!product) {
       return { success: false, message: "Produk tidak ditemukan." };

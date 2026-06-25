@@ -9,10 +9,10 @@ const navItems = [
   { title: "Dashboard", href: "/", icon: LayoutDashboard },
   { title: "Produk", href: "/products", icon: Package },
   { title: "Mutasi Stok", href: "/movements", icon: ArrowRightLeft },
-  { title: "Pengaturan", href: "/settings", icon: Settings },
+  { title: "Pengaturan", href: "/settings", icon: Settings, allowedRoles: ["SUPERADMIN"] },
 ]
 
-export function Sidebar() {
+export function Sidebar({ role }: { role?: string }) {
   const pathname = usePathname()
 
   // Query data logo aktif secara dinamis
@@ -28,6 +28,11 @@ export function Sidebar() {
         return null;
       }
     }
+  });
+
+  const filteredNavItems = navItems.filter(item => {
+    if (!item.allowedRoles) return true;
+    return role ? item.allowedRoles.includes(role) : false;
   });
 
   return (
@@ -54,7 +59,7 @@ export function Sidebar() {
         </div>
       </div>
       <nav className="flex-1 space-y-2.5 p-4">
-        {navItems.map((item) => {
+        {filteredNavItems.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link
