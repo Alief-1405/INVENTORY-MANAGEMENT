@@ -35,6 +35,8 @@ model User {
   auditLogs   AuditLog[]
   createdPOs  PurchaseOrder[] @relation("POCreator")
   approvedPOs PurchaseOrder[] @relation("POApprover")
+  salesOrders  SalesOrder[]
+  confirmedDOs DeliveryOrder[]
 }
 
 model Category {
@@ -83,6 +85,7 @@ model Product {
 
   movements   StockMovement[]
   purchaseOrders PurchaseOrder[]
+  salesOrders    SalesOrder[]
 
   @@index([sku])
   @@index([name])
@@ -160,4 +163,51 @@ model PurchaseOrder {
   @@index([status])
   @@index([supplierId])
   @@index([productId])
+}
+
+enum SOStatus {
+  PENDING_PREPARATION
+  DONE
+}
+
+model SalesOrder {
+  id           String         @id @default(uuid())
+  soNumber     String         @unique
+  customerName String
+  status       SOStatus       @default(PENDING_PREPARATION)
+  notes        String?
+  
+  productId    String
+  product      Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity     Int
+  
+  createdById  String
+  createdBy    User           @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  
+  deliveryOrder DeliveryOrder?
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([soNumber])
+  @@index([status])
+  @@index([productId])
+  @@index([createdById])
+}
+
+model DeliveryOrder {
+  id           String     @id @default(uuid())
+  doNumber     String     @unique
+  
+  salesOrderId String     @unique
+  salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  
+  confirmedById String
+  confirmedBy   User       @relation(fields: [confirmedById], references: [id], onDelete: Restrict)
+  
+  createdAt    DateTime   @default(now())
+
+  @@index([doNumber])
+  @@index([salesOrderId])
+  @@index([confirmedById])
 }
