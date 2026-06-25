@@ -21,6 +21,7 @@ const formSchema = z.object({
   name: z.string().min(3, "Nama minimal 3 karakter"),
   email: z.string().email("Format email tidak valid"),
   password: z.string().min(6, "Password minimal 6 karakter"),
+  role: z.enum(["SUPERADMIN", "PURCHASING", "SALES", "GUDANG", "MANAGER"]),
 })
 
 export default function RegisterPage() {
@@ -29,7 +30,7 @@ export default function RegisterPage() {
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { name: "", email: "", password: "" },
+    defaultValues: { name: "", email: "", password: "", role: "GUDANG" },
   })
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -104,6 +105,23 @@ export default function RegisterPage() {
               />
               {form.formState.errors.password && (
                 <p className="text-xs text-rose-500 font-medium mt-1">{form.formState.errors.password.message}</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role" className="text-[#0B132B] dark:text-zinc-350 text-xs font-bold uppercase tracking-wider">Jabatan / Hak Akses</Label>
+              <select 
+                id="role" 
+                {...form.register("role")} 
+                className="w-full py-3 px-3 bg-white/50 dark:bg-zinc-800/50 border border-slate-200/80 dark:border-zinc-800/80 focus:border-[#0B132B] focus:ring-[#0B132B]/10 focus:ring-4 focus:bg-white dark:focus:bg-zinc-950 transition-all duration-300 rounded-xl text-sm font-semibold text-slate-800 dark:text-zinc-200 outline-none cursor-pointer"
+              >
+                <option value="SUPERADMIN">SUPERADMIN (Pemilik/Developer)</option>
+                <option value="MANAGER">MANAGER (Pengawas)</option>
+                <option value="GUDANG">GUDANG (Staff Gudang)</option>
+                <option value="PURCHASING">PURCHASING (Staf Pembelian)</option>
+                <option value="SALES">SALES (Staf Penjualan)</option>
+              </select>
+              {form.formState.errors.role && (
+                <p className="text-xs text-rose-500 font-medium mt-1">{form.formState.errors.role.message}</p>
               )}
             </div>
             <Button 

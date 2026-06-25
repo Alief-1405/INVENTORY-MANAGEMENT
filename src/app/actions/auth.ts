@@ -13,6 +13,7 @@ const loginSchema = z.object({
 
 const registerSchema = loginSchema.extend({
   name: z.string().min(3, "Nama minimal 3 karakter"),
+  role: z.enum(["SUPERADMIN", "PURCHASING", "SALES", "GUDANG", "MANAGER"]),
 });
 
 export async function loginUser(formData: z.infer<typeof loginSchema>) {
@@ -59,7 +60,7 @@ export async function loginUser(formData: z.infer<typeof loginSchema>) {
 
 export async function registerUser(formData: z.infer<typeof registerSchema>) {
   try {
-    const { name, email, password } = registerSchema.parse(formData);
+    const { name, email, password, role } = registerSchema.parse(formData);
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
@@ -73,6 +74,7 @@ export async function registerUser(formData: z.infer<typeof registerSchema>) {
         name,
         email,
         password: hashedPassword,
+        role,
       },
     });
 
