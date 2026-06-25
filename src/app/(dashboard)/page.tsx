@@ -32,6 +32,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { getDashboardStats } from "@/app/actions/product"
+import ManagerDashboard from "@/components/dashboard/ManagerDashboard"
 
 // Vibrant Premium Colors for Pie Chart
 const COLORS = ["#8B5CF6", "#06B6D4", "#F59E0B", "#EF4444", "#3B82F6"] // Purple, Cyan, Orange/Amber, Red, Blue
@@ -79,6 +80,10 @@ export default function DashboardPage() {
         </Button>
       </div>
     )
+  }
+
+  if (profileRes?.role === "MANAGER") {
+    return <ManagerDashboard stats={statsRes.data as any} />
   }
 
   const {

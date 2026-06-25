@@ -39,7 +39,7 @@ export async function getDashboardStats() {
     const totalProducts = await prisma.product.count();
     
     const products = await prisma.product.findMany({
-      select: { id: true, name: true, sku: true, stock: true, minStock: true, sellPrice: true }
+      select: { id: true, name: true, sku: true, stock: true, minStock: true, buyPrice: true, sellPrice: true }
     });
 
     const lowStockCount = products.filter(p => p.stock <= p.minStock).length;
@@ -47,6 +47,32 @@ export async function getDashboardStats() {
     const totalAssetValue = products.reduce((acc, p) => {
       return acc + (p.stock * Number(p.sellPrice));
     }, 0);
+
+    const totalCapitalValue = products.reduce((acc, p) => {
+      return acc + (p.stock * Number(p.buyPrice));
+    }, 0);
+
+    const estimatedProfit = totalAssetValue - totalCapitalValue;
+    const profitMarginPercent = totalAssetValue > 0 ? Math.round((estimatedProfit / totalAssetValue) * 100) : 0;
+
+    const recentAuditLogs = await prisma.auditLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      include: {
+        user: {
+          select: { name: true, role: true }
+        }
+      }
+    });
+
+    const serializedAuditLogs = recentAuditLogs.map(log => ({
+      id: log.id,
+      time: new Date(log.createdAt).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" }),
+      userName: log.user?.name || "System/Deleted User",
+      role: log.user?.role || "-",
+      action: log.action,
+      details: log.details || ""
+    }));
 
     // 1. Produk Kritis (Low Stock) - limit 5 terendah
     const criticalProducts = products
@@ -156,8 +182,12 @@ export async function getDashboardStats() {
         totalProducts,
         lowStockCount,
         totalAssetValue,
+        totalCapitalValue,
+        estimatedProfit,
+        profitMarginPercent,
         criticalProducts,
         recentActivities: serializedRecentActivities,
+        recentAuditLogs: serializedAuditLogs,
         categoryComposition,
         mutationTrend
       } 
