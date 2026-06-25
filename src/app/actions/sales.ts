@@ -38,15 +38,18 @@ export async function createSalesOrder(
       const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       const soNumber = `SO-${dateStr}-${String(count + 1).padStart(4, "0")}`;
 
+      const totalPrice = Number(product.sellPrice) * quantity;
+
       const so = await tx.salesOrder.create({
         data: {
           soNumber,
           customerName,
           productId,
           quantity,
+          totalPrice,
           notes: notes || null,
           createdById: session.id,
-          status: "PENDING_PREPARATION"
+          status: "PENDING_PAYMENT"
         }
       });
 
@@ -54,7 +57,7 @@ export async function createSalesOrder(
         data: {
           userId: session.id,
           action: "CREATE_SALES_ORDER",
-          details: `Sales Order ${soNumber} untuk pelanggan "${customerName}" dibuat oleh ${session.name} (Produk: ${product.name}, Qty: ${quantity})`
+          details: `Sales Order ${soNumber} untuk pelanggan "${customerName}" dibuat oleh ${session.name} (Produk: ${product.name}, Qty: ${quantity}, Total Harga: Rp ${totalPrice.toLocaleString("id-ID")})`
         }
       });
 
@@ -143,6 +146,9 @@ export async function confirmDispatch(soId: string) {
       if (so.status === "DONE") {
         throw new Error(`Barang untuk SO ${so.soNumber} sudah dikeluarkan sebelumnya.`);
       }
+      if (so.status !== "PAID") {
+        throw new Error(`Gagal! Barang untuk SO ${so.soNumber} tidak dapat dikeluarkan karena belum lunas (status: ${so.status}).`);
+      }
 
       const product = so.product;
 
@@ -214,3 +220,151 @@ export async function confirmDispatch(soId: string) {
     return { success: false, message: error.message || "Gagal mengkonfirmasi pengeluaran barang." };
   }
 }
+
+/**
+ * Server Action processDeliveryOrder (Khusus GUDANG & SUPERADMIN)
+ * Digunakan oleh Gudang untuk mengkonfirmasi SO dan memotong stok
+ */
+export async function processDeliveryOrder(soId: string) {
+  return await confirmDispatch(soId);
+}
+
+/**
+ * Konfirmasi Pembayaran Sales Order (Khusus SALES & SUPERADMIN)
+ */
+export async function confirmPayment(soId: string, paymentMethod: string) {
+  try {
+    const session = await requireServerRole("SALES", "SUPERADMIN");
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const so = await tx.salesOrder.findUnique({
+        where: { id: soId }
+      });
+
+      if (!so) throw new Error("Sales Order tidak ditemukan.");
+      if (so.status !== "PENDING_PAYMENT") {
+        throw new Error("Sales Order tidak dalam status menunggu pembayaran.");
+      }
+
+      const updatedSO = await tx.salesOrder.update({
+        where: { id: soId },
+        data: {
+          status: "PAID",
+          paymentMethod
+        }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId: session.id,
+          action: "CONFIRM_PAYMENT",
+          details: `Pembayaran untuk SO ${so.soNumber} dikonfirmasi oleh ${session.name} via ${paymentMethod}. Status berubah menjadi PAID.`
+        }
+      });
+
+      return updatedSO;
+    });
+
+    revalidatePath("/sales-order");
+    revalidatePath("/dispatch-order");
+    revalidatePath("/movements");
+    revalidatePath("/");
+    return { success: true, data: updated };
+  } catch (error: any) {
+    return { success: false, message: error.message || "Gagal mengkonfirmasi pembayaran." };
+  }
+}
+
+/**
+ * Mengambil semua Sales Order milik user login (jika SALES) atau seluruh SO (jika GUDANG/SUPERADMIN/MANAGER)
+ */
+export async function getSalesOrders() {
+  try {
+    const session = await requireServerRole("SALES", "GUDANG", "MANAGER", "SUPERADMIN");
+
+    const whereClause = session.role === "SALES" ? { createdById: session.id } : {};
+
+    const orders = await prisma.salesOrder.findMany({
+      where: whereClause,
+      include: {
+        product: {
+          select: {
+            name: true,
+            sku: true,
+            sellPrice: true
+          }
+        },
+        createdBy: {
+          select: {
+            name: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: "desc"
+      }
+    });
+
+    return { 
+      success: true, 
+      data: orders.map(o => ({
+        ...o,
+        createdAt: o.createdAt.toISOString(),
+        updatedAt: o.updatedAt.toISOString(),
+        totalPrice: Number(o.totalPrice)
+      }))
+    };
+  } catch (error: any) {
+    return { success: false, message: error.message || "Gagal mengambil data Sales Order." };
+  }
+}
+
+/**
+ * Membatalkan Sales Order oleh Gudang (Khusus GUDANG & SUPERADMIN)
+ * Hanya bisa dilakukan jika status masih PENDING_PAYMENT
+ */
+export async function cancelOrderByWarehouse(soId: string) {
+  try {
+    const session = await requireServerRole("GUDANG", "SUPERADMIN");
+
+    const result = await prisma.$transaction(async (tx) => {
+      const so = await tx.salesOrder.findUnique({
+        where: { id: soId }
+      });
+
+      if (!so) {
+        throw new Error("Sales Order tidak ditemukan.");
+      }
+
+      if (so.status !== "PENDING_PAYMENT") {
+        throw new Error(`Gagal! Hanya pesanan dengan status menunggu pembayaran (PENDING_PAYMENT) yang dapat dibatalkan. Status saat ini: ${so.status}.`);
+      }
+
+      const updatedSO = await tx.salesOrder.update({
+        where: { id: soId },
+        data: {
+          status: "CANCELLED"
+        }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId: session.id,
+          action: "CANCEL_SALES_ORDER",
+          details: `Sales Order ${so.soNumber} dibatalkan oleh pihak Gudang (${session.name}). Status berubah menjadi CANCELLED.`
+        }
+      });
+
+      return updatedSO;
+    });
+
+    revalidatePath("/dispatch-order");
+    revalidatePath("/sales-order");
+    revalidatePath("/movements");
+    revalidatePath("/");
+    return { success: true, data: result };
+  } catch (error: any) {
+    return { success: false, message: error.message || "Gagal membatalkan Sales Order." };
+  }
+}
+

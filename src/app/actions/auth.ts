@@ -25,6 +25,10 @@ export async function loginUser(formData: z.infer<typeof loginSchema>) {
       return { success: false, message: "Email tidak ditemukan" };
     }
 
+    if (!user.isActive) {
+      return { success: false, message: "Akun Anda telah dinonaktifkan. Silakan hubungi Superadmin." };
+    }
+
     const isValid = await bcrypt.compare(password, user.password);
     if (!isValid) {
       return { success: false, message: "Password salah" };

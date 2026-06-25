@@ -16,7 +16,7 @@ import {
   ExternalLink
 } from "lucide-react";
 import { toast } from "sonner";
-import { getSalesOrderDetailsByNo, confirmDispatch } from "@/app/actions/sales";
+import { getSalesOrderDetailsByNo, confirmDispatch, cancelOrderByWarehouse } from "@/app/actions/sales";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -26,6 +26,8 @@ export default function DispatchOrderPage() {
   const [searching, setSearching] = useState(false);
   const [soDetails, setSoDetails] = useState<any | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   // 1. Fetch user profile to verify role
   const { data: profileRes, isLoading: loadingProfile } = useQuery<{ id: string; name: string; role: string }>({
@@ -49,6 +51,7 @@ export default function DispatchOrderPage() {
 
     setSearching(true);
     setSoDetails(null);
+    setShowCancelConfirm(false);
     try {
       const res = await getSalesOrderDetailsByNo(soSearchInput.trim());
       if (res.success && res.data) {
@@ -86,6 +89,31 @@ export default function DispatchOrderPage() {
       toast.error(err.message || "Terjadi kesalahan sistem saat memproses.");
     } finally {
       setConfirming(false);
+    }
+  };
+
+  const handleCancelOrder = async () => {
+    if (!soDetails) return;
+    
+    setCancelling(true);
+    try {
+      const res = await cancelOrderByWarehouse(soDetails.id);
+      if (res.success && res.data) {
+        toast.success(`Sales Order ${soDetails.soNumber} berhasil dibatalkan.`);
+        // Reload details to show updated state
+        const updatedRes = await getSalesOrderDetailsByNo(soDetails.soNumber);
+        if (updatedRes.success && updatedRes.data) {
+          setSoDetails(updatedRes.data);
+        }
+        setShowCancelConfirm(false);
+        queryClient.invalidateQueries({ queryKey: ["dashboard-live-stats"] });
+      } else {
+        toast.error(res.message || "Gagal membatalkan Sales Order.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Terjadi kesalahan sistem saat membatalkan.");
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -174,14 +202,24 @@ export default function DispatchOrderPage() {
                 </div>
                 <div>
                   {soDetails.status === "DONE" ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-55 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-extrabold uppercase dark:bg-emerald-950/20 dark:text-emerald-400">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-250 px-2.5 py-0.5 text-[10px] font-extrabold uppercase dark:bg-emerald-950/20 dark:text-emerald-400">
                       <CheckCircle className="h-3.5 w-3.5" />
                       Selesai (DO Diterbitkan)
                     </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-800 border border-amber-250 px-2.5 py-0.5 text-[10px] font-extrabold uppercase dark:bg-amber-950/20 dark:text-amber-400 animate-pulse">
+                  ) : soDetails.status === "PAID" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-800 border border-blue-200 px-2.5 py-0.5 text-[10px] font-extrabold uppercase dark:bg-blue-950/20 dark:text-blue-400 animate-pulse">
                       <Clock className="h-3.5 w-3.5" />
-                      Pending Preparation
+                      Lunas, Siap Persiapan
+                    </span>
+                  ) : soDetails.status === "CANCELLED" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-800 border border-slate-300 px-2.5 py-0.5 text-[10px] font-extrabold uppercase dark:bg-zinc-800 dark:text-zinc-400">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Dibatalkan Gudang
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-red-50 text-red-800 border border-red-200 px-2.5 py-0.5 text-[10px] font-extrabold uppercase dark:bg-red-950/20 dark:text-red-400">
+                      <Clock className="h-3.5 w-3.5" />
+                      Menunggu Pembayaran
                     </span>
                   )}
                 </div>
@@ -190,7 +228,7 @@ export default function DispatchOrderPage() {
 
             <CardContent className="pt-5 space-y-6">
               {/* Informasi Header SO */}
-              <div className="grid gap-4 sm:grid-cols-2 text-xs">
+              <div className="grid gap-4 sm:grid-cols-3 text-xs">
                 <div className="p-3 bg-white/40 rounded-xl border border-slate-100/50 dark:border-zinc-850 flex items-center gap-3">
                   <div className="p-2 bg-indigo-50 dark:bg-indigo-950/20 rounded-lg text-indigo-600">
                     <User className="h-4.5 w-4.5" />
@@ -208,6 +246,22 @@ export default function DispatchOrderPage() {
                   <div>
                     <div className="text-[10px] font-bold text-slate-400 uppercase">Sales Pembuat SO</div>
                     <div className="font-extrabold text-slate-800 dark:text-zinc-200">{soDetails.createdBy.name}</div>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-white/40 rounded-xl border border-slate-100/50 dark:border-zinc-850 flex items-center gap-3">
+                  <div className="p-2 bg-indigo-50 dark:bg-indigo-950/20 rounded-lg text-indigo-600">
+                    <CheckCircle className="h-4.5 w-4.5" />
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase">Status Pembayaran</div>
+                    <div className="font-extrabold text-slate-800 dark:text-zinc-200">
+                      {soDetails.status === "DONE" || soDetails.status === "PAID" ? (
+                        <span className="text-emerald-600">LUNAS ({soDetails.paymentMethod || "QRIS"})</span>
+                      ) : (
+                        <span className="text-red-500 font-extrabold">BELUM BAYAR</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -268,31 +322,96 @@ export default function DispatchOrderPage() {
 
               {/* Tombol Aksi Pengeluaran */}
               <div className="pt-2 border-t border-slate-100 dark:border-zinc-900">
-                {soDetails.status === "PENDING_PREPARATION" ? (
-                  <Button
-                    onClick={handleConfirmDispatch}
-                    disabled={confirming || soDetails.product.stock < soDetails.quantity}
-                    className="w-full py-2.5 bg-emerald-650 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                  >
-                    {confirming ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Memproses Pengeluaran & Mengurangi Stok...
-                      </>
-                    ) : (
-                      <>
-                        <Truck className="h-4 w-4 text-emerald-350" />
-                        Konfirmasi Pengeluaran Barang (Cetak DO)
-                      </>
-                    )}
-                  </Button>
-                ) : (
-                  <div className="flex flex-col items-center justify-center p-4 bg-emerald-50/30 rounded-xl border border-dashed border-emerald-250 text-emerald-850 dark:text-emerald-400 text-center text-xs">
+                {soDetails.status === "DONE" ? (
+                  <div className="flex flex-col items-center justify-center p-4 bg-emerald-50/30 rounded-xl border border-dashed border-emerald-250 text-emerald-855 dark:text-emerald-400 text-center text-xs">
                     <CheckCircle className="h-8 w-8 text-emerald-600 mb-1.5 shrink-0" />
                     <span className="font-bold">Barang Telah Berhasil Dikeluarkan</span>
                     <span className="text-[10px] text-slate-500 font-semibold mt-1">
                       Nomor DO Terbit: <b>{soDetails.deliveryOrder?.doNumber}</b> pada {new Date(soDetails.deliveryOrder?.createdAt).toLocaleString("id-ID")}
                     </span>
+                  </div>
+                ) : soDetails.status === "CANCELLED" ? (
+                  <div className="flex flex-col items-center justify-center p-4 bg-slate-50/30 rounded-xl border border-dashed border-slate-300 text-slate-750 dark:text-slate-400 text-center text-xs">
+                    <AlertTriangle className="h-8 w-8 text-slate-500 mb-1.5 shrink-0" />
+                    <span className="font-bold">Sales Order Dibatalkan</span>
+                    <span className="text-[10px] text-slate-550 font-semibold mt-1">
+                      Pesanan ini telah dibatalkan oleh pihak Gudang dan tidak dapat diproses lebih lanjut.
+                    </span>
+                  </div>
+                ) : showCancelConfirm ? (
+                  <div className="p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 rounded-xl space-y-3 animate-in fade-in duration-200">
+                    <div className="flex items-start gap-2.5">
+                      <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-extrabold text-xs text-rose-850 dark:text-rose-400 block">Konfirmasi Pembatalan Pesanan</span>
+                        <span className="text-[10px] text-slate-500 font-medium">Apakah Anda yakin ingin membatalkan Sales Order ini? Aksi ini akan mengubah status SO menjadi DIBATALKAN dan membebaskan antrean pengeluaran.</span>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2 text-xs">
+                      <Button
+                        onClick={() => setShowCancelConfirm(false)}
+                        disabled={cancelling}
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-1.5 rounded-lg cursor-pointer dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      >
+                        Kembali
+                      </Button>
+                      <Button
+                        onClick={handleCancelOrder}
+                        disabled={cancelling}
+                        className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer"
+                      >
+                        {cancelling ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          "Ya, Batalkan SO"
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Button
+                        onClick={handleConfirmDispatch}
+                        disabled={confirming || cancelling || soDetails.status === "PENDING_PAYMENT" || soDetails.product.stock < soDetails.quantity}
+                        className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-55 disabled:cursor-not-allowed"
+                      >
+                        {confirming ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Memproses...
+                          </>
+                        ) : (
+                          <>
+                            <Truck className="h-4 w-4 text-emerald-350" />
+                            Konfirmasi Pengeluaran Barang
+                          </>
+                        )}
+                      </Button>
+
+                      <Button
+                        onClick={() => setShowCancelConfirm(true)}
+                        disabled={confirming || cancelling || soDetails.status !== "PENDING_PAYMENT"}
+                        className="py-2.5 px-4 bg-rose-600 hover:bg-rose-750 active:bg-rose-800 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-55 disabled:bg-slate-200 dark:disabled:bg-zinc-800 disabled:text-slate-400 dark:disabled:text-zinc-650 disabled:shadow-none disabled:cursor-not-allowed border-none outline-none"
+                      >
+                        <AlertTriangle className="h-4 w-4" />
+                        Batalkan Pesanan
+                      </Button>
+                    </div>
+
+                    {soDetails.status === "PENDING_PAYMENT" && (
+                      <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl flex items-start gap-2">
+                        <AlertTriangle className="h-4.5 w-4.5 text-red-650 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold text-[10px] block">
+                            Barang tidak bisa dikeluarkan, Customer belum bayar.
+                          </span>
+                          <span className="text-[9px] text-red-700">
+                            Gudang dapat membatalkan pesanan ini jika customer menahan stok terlalu lama.
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -331,12 +450,18 @@ export default function DispatchOrderPage() {
                   </div>
                 </div>
 
-                <div className="text-center text-[9px] text-slate-400 font-medium">
-                  {soDetails.status === "DONE" ? "STATUS: BARANG TELAH DIKIRIM" : "STATUS: DRAF PERSIAPAN BARANG"}
+                 <div className="text-center text-[9px] text-slate-400 font-medium">
+                  {soDetails.status === "DONE" 
+                    ? "STATUS: BARANG TELAH DIKIRIM" 
+                    : soDetails.status === "PAID" 
+                      ? "STATUS: LUNAS, DRAF PERSIAPAN BARANG" 
+                      : soDetails.status === "CANCELLED"
+                        ? "STATUS: DIBATALKAN GUDANG"
+                        : "STATUS: MENUNGGU PEMBAYARAN"}
                 </div>
               </div>
 
-              {soDetails.product.stock < soDetails.quantity && soDetails.status === "PENDING_PREPARATION" && (
+              {soDetails.product.stock < soDetails.quantity && soDetails.status === "PAID" && (
                 <div className="p-3 bg-rose-50 border border-rose-150 text-rose-800 rounded-xl flex items-start gap-2">
                   <AlertTriangle className="h-4.5 w-4.5 text-rose-600 shrink-0 mt-0.5" />
                   <span className="font-bold text-[10px]">Stok gudang tidak cukup untuk memenuhi pesanan ini! Pengeluaran barang dinonaktifkan.</span>

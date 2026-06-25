@@ -207,10 +207,18 @@ export async function receivePurchaseOrder(poId: string) {
     const session = await requireServerRole("GUDANG", "SUPERADMIN");
 
     const result = await prisma.$transaction(async (tx) => {
-      // Ambil detail PO saat ini
+      // Ambil detail PO saat ini beserta item-itemnya
       const po = await tx.purchaseOrder.findUnique({
         where: { id: poId },
-        include: { supplier: true, product: true }
+        include: { 
+          supplier: true, 
+          product: true,
+          items: {
+            include: {
+              product: true
+            }
+          }
+        }
       });
 
       if (!po) throw new Error("Purchase Order tidak ditemukan.");
@@ -227,7 +235,39 @@ export async function receivePurchaseOrder(poId: string) {
       });
 
       // Tambahkan stok produk jika PO memiliki relasi produk
-      if (po.productId && po.quantity) {
+      if (po.items && po.items.length > 0) {
+        for (const item of po.items) {
+          const product = item.product;
+          if (product) {
+            const newStock = product.stock + item.quantity;
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { stock: newStock }
+            });
+
+            // Catat pergerakan stok (Mutasi IN)
+            await tx.stockMovement.create({
+              data: {
+                productId: item.productId,
+                type: "IN",
+                quantity: item.quantity,
+                reason: `Penerimaan Restock via PO ${po.poNumber}`,
+                userId: session.id
+              }
+            });
+
+            // Catat Audit Log untuk penambahan stok
+            await tx.auditLog.create({
+              data: {
+                userId: session.id,
+                action: "RECEIVE_PURCHASE_ORDER",
+                details: `Penerimaan PO ${po.poNumber}. Stok "${product.name}" (${item.productId}) bertambah ${item.quantity} unit. Stok baru: ${newStock}.`
+              }
+            });
+          }
+        }
+      } else if (po.productId && po.quantity) {
+        // Fallback untuk PO format lama (Single-product)
         const product = await tx.product.findUnique({
           where: { id: po.productId }
         });
@@ -315,5 +355,73 @@ export async function getPurchaseOrdersForTracking() {
     return { success: true, data: serializedPOs };
   } catch (error: any) {
     return { success: false, message: error.message || "Gagal mengambil data pelacakan pengadaan." };
+  }
+}
+
+/**
+ * Pembuatan PO Resmi dengan banyak item barang sekaligus (Multi-Item)
+ */
+export async function createOfficialPurchaseOrder(
+  supplierId: string,
+  items: { productId: string; quantity: number; price: number }[]
+) {
+  try {
+    const session = await requireServerRole("PURCHASING", "SUPERADMIN");
+
+    if (!supplierId) {
+      return { success: false, message: "Supplier wajib dipilih." };
+    }
+
+    if (!items || items.length === 0) {
+      return { success: false, message: "Minimal harus ada satu item barang." };
+    }
+
+    // Hitung total akumulasi biaya
+    const totalCost = items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+
+    const result = await prisma.$transaction(async (tx) => {
+      const count = await tx.purchaseOrder.count();
+      const poNumber = `PO-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${String(count + 1).padStart(4, "0")}`;
+
+      // Buat dokumen PO utama
+      const po = await tx.purchaseOrder.create({
+        data: {
+          poNumber,
+          totalCost,
+          supplierId,
+          createdById: session.id,
+          status: "PENDING_APPROVAL",
+        },
+      });
+
+      // Simpan rincian item detail
+      await tx.purchaseOrderItem.createMany({
+        data: items.map((item) => ({
+          purchaseOrderId: po.id,
+          productId: item.productId,
+          quantity: item.quantity,
+          price: item.price,
+        })),
+      });
+
+      // Catat log audit
+      await tx.auditLog.create({
+        data: {
+          userId: session.id,
+          action: "CREATE_PURCHASE_ORDER",
+          details: `Purchase Order Resmi ${poNumber} berhasil dibuat dengan ${items.length} item barang senilai Rp ${totalCost.toLocaleString("id-ID")} menunggu persetujuan Manager.`,
+        },
+      });
+
+      return po;
+    });
+
+    revalidatePath("/purchase-orders");
+    revalidatePath("/procurement-tracking");
+    revalidatePath("/movements");
+    revalidatePath("/");
+    return { success: true, data: result };
+  } catch (error: any) {
+    return { success: false, message: error.message || "Gagal membuat Purchase Order Resmi." };
   }
 }

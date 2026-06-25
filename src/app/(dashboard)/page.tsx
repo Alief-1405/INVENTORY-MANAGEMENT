@@ -43,7 +43,7 @@ export default function DashboardPage() {
   const { data: statsRes, isLoading, error } = useQuery({
     queryKey: ["dashboard-live-stats"],
     queryFn: () => getDashboardStats(),
-    refetchOnWindowFocus: true
+    refetchOnWindowFocus: false
   })
 
   // Query data profil user untuk mengecek role di client-side

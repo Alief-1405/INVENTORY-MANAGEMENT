@@ -6,14 +6,14 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { toast } from "sonner"
 import { motion } from "framer-motion"
-import Link from "next/link"
+// Link removed to prevent public registration links — login-only page
 import { useRouter } from "next/navigation"
 import { Mail, Lock, Loader2, ArrowRight } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { loginUser } from "@/app/actions/auth"
 
 const formSchema = z.object({
@@ -133,14 +133,6 @@ export default function LoginPage() {
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex justify-center border-t border-white/20 dark:border-zinc-800/20 py-4 bg-white/30 dark:bg-zinc-900/20">
-          <p className="text-xs text-slate-600 dark:text-zinc-400">
-            Belum punya akun?{" "}
-            <Link href="/register" className="font-bold text-[#0B132B] dark:text-teal-400 hover:underline">
-              Daftar sekarang
-            </Link>
-          </p>
-        </CardFooter>
       </Card>
     </motion.div>
   )

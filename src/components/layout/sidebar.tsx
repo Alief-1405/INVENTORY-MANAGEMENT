@@ -2,7 +2,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { Package, ArrowRightLeft, LayoutDashboard, Settings, Loader2, FileText, Truck, ShoppingCart, PackageOpen } from "lucide-react"
+import { Package, ArrowRightLeft, LayoutDashboard, Settings, Loader2, FileText, Truck, ShoppingCart, PackageOpen, Users } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 
 const navItems = [
@@ -13,6 +13,7 @@ const navItems = [
   { title: "Pelacakan Pengadaan", href: "/procurement-tracking", icon: Truck, allowedRoles: ["GUDANG", "SUPERADMIN"] },
   { title: "Sales Order", href: "/sales-order", icon: ShoppingCart, allowedRoles: ["SALES", "SUPERADMIN"] },
   { title: "Pengeluaran Barang", href: "/dispatch-order", icon: PackageOpen, allowedRoles: ["GUDANG", "SUPERADMIN"] },
+  { title: "Manajemen Karyawan", href: "/superadmin/manage-users", icon: Users, allowedRoles: ["SUPERADMIN"] },
   { title: "Pengaturan", href: "/settings", icon: Settings, allowedRoles: ["SUPERADMIN"] },
 ]
 
@@ -34,10 +35,17 @@ export function Sidebar({ role }: { role?: string }) {
     }
   });
 
-  const filteredNavItems = navItems.filter(item => {
-    if (!item.allowedRoles) return true;
-    return role ? item.allowedRoles.includes(role) : false;
-  });
+  const filteredNavItems = navItems
+    .filter(item => {
+      if (!item.allowedRoles) return true;
+      return role ? item.allowedRoles.includes(role) : false;
+    })
+    .map(item => {
+      if (item.href === "/movements" && role === "SALES") {
+        return { ...item, title: "Riwayat Transaksi" };
+      }
+      return item;
+    });
 
   return (
     <div className="flex h-screen w-64 flex-col bg-gradient-to-b from-[#0F2E2D] to-[#0B132B] text-white shadow-2xl border-r border-white/5">

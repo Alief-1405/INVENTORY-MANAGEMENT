@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import RoleGate from "@/components/auth/role-gate"
 
 import ExcelImporter from "@/components/products/ExcelImporter"
 import AIScanner from "@/components/products/AIScanner"
@@ -91,6 +92,22 @@ export default function ProductsPage() {
   })
 
   const products = result?.data || []
+
+  // Query mengambil data profil user untuk Role-Based Access Control
+  const { data: profile } = useQuery<{ id: string; name: string; email: string; role: string }>({
+    queryKey: ["user-profile"],
+    queryFn: async () => {
+      const res = await fetch("/api/user/profile")
+      if (!res.ok) throw new Error("Gagal mengambil profil.")
+      const json = await res.json()
+      return json.data
+    }
+  })
+
+  const currentRole = profile?.role
+  const isPurchasing = currentRole === "PURCHASING"
+  // Selama data loading (currentRole belum terisi), default ke true untuk menyelaraskan colSpan tabel
+  const isAllowedToEdit = !currentRole || ["GUDANG", "PURCHASING", "SUPERADMIN"].includes(currentRole)
 
   if (isError || (result && !result.success)) {
     toast.error("Gagal memuat produk")
@@ -218,49 +235,57 @@ export default function ProductsPage() {
       {/* Header Halaman */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-[#0B132B] dark:text-zinc-50">Manajemen Produk</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight text-[#0B132B] dark:text-zinc-50">
+            {isPurchasing ? "Katalog & Pengadaan Produk" : "Manajemen Produk"}
+          </h1>
           <p className="text-slate-500 text-sm">
-            Kelola katalog barang, pantau tingkat persediaan, dan atur batas minimum stok.
+            {isPurchasing
+              ? "Pantau katalog produk, harga beli, stok minimum, serta ajukan restock barang."
+              : "Kelola katalog barang, pantau tingkat persediaan, dan atur batas minimum stok."}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Impor Excel (Secondary Button) */}
-          <Button
-            variant="outline"
-            onClick={() => setActiveImportPanel(activeImportPanel === "EXCEL" ? "NONE" : "EXCEL")}
-            className={`group font-bold border-slate-200/80 dark:border-slate-800 transition-all duration-300 rounded-xl hover:bg-slate-100/50 dark:hover:bg-zinc-900/50 active:scale-95 text-xs ${
-              activeImportPanel === "EXCEL" 
-                ? "border-emerald-500 text-emerald-700 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20" 
-                : "text-slate-600 hover:text-slate-800 dark:text-zinc-300 bg-white/40"
-            }`}
-          >
-            <FileSpreadsheet className="mr-1.5 h-4 w-4 text-emerald-600 group-hover:scale-115 group-hover:rotate-6 transition-transform duration-200" />
-            Impor Excel
-          </Button>
+        <RoleGate allowedRoles={["GUDANG", "PURCHASING", "SUPERADMIN"]} currentRole={currentRole}>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Impor Excel (Secondary Button) */}
+            <Button
+              variant="outline"
+              onClick={() => setActiveImportPanel(activeImportPanel === "EXCEL" ? "NONE" : "EXCEL")}
+              className={`group font-bold border-slate-200/80 dark:border-slate-800 transition-all duration-300 rounded-xl hover:bg-slate-100/50 dark:hover:bg-zinc-900/50 active:scale-95 text-xs ${
+                activeImportPanel === "EXCEL" 
+                  ? "border-emerald-500 text-emerald-700 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20" 
+                  : "text-slate-600 hover:text-slate-800 dark:text-zinc-300 bg-white/40"
+              }`}
+            >
+              <FileSpreadsheet className="mr-1.5 h-4 w-4 text-emerald-600 group-hover:scale-115 group-hover:rotate-6 transition-transform duration-200" />
+              Impor Excel
+            </Button>
 
-          {/* AI Vision Scan (Secondary Button) */}
-          <Button
-            variant="outline"
-            onClick={() => setActiveImportPanel(activeImportPanel === "AI" ? "NONE" : "AI")}
-            className={`group font-bold border-slate-200/80 dark:border-slate-800 transition-all duration-300 rounded-xl hover:bg-slate-100/50 dark:hover:bg-zinc-900/50 active:scale-95 text-xs ${
-              activeImportPanel === "AI" 
-                ? "border-purple-500 text-purple-700 dark:text-purple-400 bg-purple-50/50 dark:bg-purple-950/20" 
-                : "text-slate-600 hover:text-slate-800 dark:text-zinc-300 bg-white/40"
-            }`}
-          >
-            <Sparkles className="mr-1.5 h-4 w-4 text-purple-655 group-hover:scale-115 group-hover:rotate-12 transition-transform duration-200" />
-            AI Vision Scan
-          </Button>
+            {/* AI Vision Scan (Secondary Button - Sembunyikan untuk Purchasing) */}
+            {!isPurchasing && (
+              <Button
+                variant="outline"
+                onClick={() => setActiveImportPanel(activeImportPanel === "AI" ? "NONE" : "AI")}
+                className={`group font-bold border-slate-200/80 dark:border-slate-800 transition-all duration-300 rounded-xl hover:bg-slate-100/50 dark:hover:bg-zinc-900/50 active:scale-95 text-xs ${
+                  activeImportPanel === "AI" 
+                    ? "border-purple-500 text-purple-700 dark:text-purple-400 bg-purple-50/50 dark:bg-purple-950/20" 
+                    : "text-slate-600 hover:text-slate-800 dark:text-zinc-300 bg-white/40"
+                }`}
+              >
+                <Sparkles className="mr-1.5 h-4 w-4 text-purple-655 group-hover:scale-115 group-hover:rotate-12 transition-transform duration-200" />
+                AI Vision Scan
+              </Button>
+            )}
 
-          {/* Tambah Produk (Primary Button) */}
-          <Button 
-            onClick={handleOpenCreateModal} 
-            className="group bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-750 hover:to-indigo-755 text-white font-bold shadow-md shadow-purple-600/10 hover:shadow-purple-600/20 transition-all duration-300 hover:-translate-y-0.5 active:scale-95 rounded-xl border-none cursor-pointer text-xs"
-          >
-            <Plus className="mr-1.5 h-4 w-4 group-hover:rotate-90 transition-transform duration-300" />
-            Tambah Produk
-          </Button>
-        </div>
+            {/* Tambah Produk (Primary Button) */}
+            <Button 
+              onClick={handleOpenCreateModal} 
+              className="group bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-750 hover:to-indigo-755 text-white font-bold shadow-md shadow-purple-600/10 hover:shadow-purple-600/20 transition-all duration-300 hover:-translate-y-0.5 active:scale-95 rounded-xl border-none cursor-pointer text-xs"
+            >
+              <Plus className="mr-1.5 h-4 w-4 group-hover:rotate-90 transition-transform duration-300" />
+              Tambah Produk
+            </Button>
+          </div>
+        </RoleGate>
       </div>
 
       {/* Panel Upload Excel/AI jika aktif */}
@@ -367,10 +392,22 @@ export default function ProductsPage() {
             <TableRow>
               <TableHead className="font-extrabold text-[#0B132B] dark:text-slate-200 w-[120px]">SKU</TableHead>
               <TableHead className="font-extrabold text-[#0B132B] dark:text-slate-200">Nama Produk</TableHead>
-              <TableHead className="font-extrabold text-[#0B132B] dark:text-slate-200 text-right w-[150px]">Harga Jual</TableHead>
-              <TableHead className="font-extrabold text-[#0B132B] dark:text-slate-200 text-right w-[100px]">Stok</TableHead>
+              {isPurchasing && (
+                <TableHead className="font-extrabold text-[#0B132B] dark:text-slate-200 text-right w-[130px]">Harga Beli (Cost)</TableHead>
+              )}
+              <TableHead className="font-extrabold text-[#0B132B] dark:text-slate-200 text-right w-[150px]">
+                {isPurchasing ? "Harga Jual (Price)" : "Harga Jual"}
+              </TableHead>
+              <TableHead className="font-extrabold text-[#0B132B] dark:text-slate-200 text-right w-[100px]">
+                {isPurchasing ? "Stok Saat Ini" : "Stok"}
+              </TableHead>
+              {isPurchasing && (
+                <TableHead className="font-extrabold text-[#0B132B] dark:text-slate-200 text-right w-[130px]">Batas Minimum Stok</TableHead>
+              )}
               <TableHead className="font-extrabold text-[#0B132B] dark:text-slate-200 text-center w-[130px]">Status</TableHead>
-              <TableHead className="font-extrabold text-[#0B132B] dark:text-slate-200 text-center w-[120px]">Aksi</TableHead>
+              <RoleGate allowedRoles={["GUDANG", "PURCHASING", "SUPERADMIN"]} currentRole={currentRole}>
+                <TableHead className="font-extrabold text-[#0B132B] dark:text-slate-200 text-center w-[120px]">Aksi</TableHead>
+              </RoleGate>
             </TableRow>
           </TableHeader>
           <TableBody className="bg-white/40">
@@ -379,15 +416,19 @@ export default function ProductsPage() {
                 <TableRow key={i}>
                   <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+                  {isPurchasing && <TableCell><Skeleton className="h-4 w-24 ml-auto" /></TableCell>}
                   <TableCell><Skeleton className="h-4 w-24 ml-auto" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-12 ml-auto" /></TableCell>
+                  {isPurchasing && <TableCell><Skeleton className="h-4 w-12 ml-auto" /></TableCell>}
                   <TableCell><Skeleton className="h-6 w-20 mx-auto rounded-full" /></TableCell>
-                  <TableCell><Skeleton className="h-6 w-16 mx-auto rounded-md" /></TableCell>
+                  <RoleGate allowedRoles={["GUDANG", "PURCHASING", "SUPERADMIN"]} currentRole={currentRole}>
+                    <TableCell><Skeleton className="h-6 w-16 mx-auto rounded-md" /></TableCell>
+                  </RoleGate>
                 </TableRow>
               ))
             ) : filteredProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-12 text-slate-500">
+                <TableCell colSpan={isPurchasing ? 8 : (isAllowedToEdit ? 6 : 5)} className="text-center py-12 text-slate-500">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <ShoppingBag className="h-8 w-8 text-slate-400 stroke-1" />
                     <p className="font-semibold text-sm">Tidak ada produk ditemukan</p>
@@ -399,15 +440,35 @@ export default function ProductsPage() {
               filteredProducts.map((product: any) => {
                 const isLow = product.stock <= product.minStock && product.stock > 0
                 const isOut = product.stock === 0
+                const isCritical = product.stock <= product.minStock
 
                 return (
-                  <TableRow key={product.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/30 transition-all duration-150">
+                  <TableRow 
+                    key={product.id} 
+                    className={`hover:bg-slate-50/50 dark:hover:bg-zinc-900/30 transition-all duration-150 ${
+                      isPurchasing && isCritical ? "bg-red-50/55 dark:bg-red-950/20 hover:bg-red-100/50 dark:hover:bg-red-950/30" : ""
+                    }`}
+                  >
                     <TableCell className="font-mono text-xs font-bold text-slate-800">{product.sku}</TableCell>
                     <TableCell className="font-bold text-slate-900 dark:text-slate-100">{product.name}</TableCell>
+                    {isPurchasing && (
+                      <TableCell className="text-right font-bold text-slate-700 dark:text-zinc-300">
+                        {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(product.buyPrice)}
+                      </TableCell>
+                    )}
                     <TableCell className="text-right font-bold text-[#0B132B]">
                       {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(product.sellPrice)}
                     </TableCell>
-                    <TableCell className="text-right font-extrabold text-slate-950 dark:text-slate-50">{product.stock}</TableCell>
+                    <TableCell className={`text-right font-extrabold ${
+                      isCritical ? "text-red-650 dark:text-red-400 font-black" : "text-slate-950 dark:text-slate-50"
+                    }`}>
+                      {product.stock}
+                    </TableCell>
+                    {isPurchasing && (
+                      <TableCell className="text-right font-semibold text-slate-650 dark:text-zinc-400">
+                        {product.minStock}
+                      </TableCell>
+                    )}
                     <TableCell className="text-center">
                       {isOut ? (
                         <Badge className="bg-red-50 text-red-800 hover:bg-red-50 dark:bg-red-500/10 dark:text-red-400 border border-red-200/50 dark:border-red-500/20 font-bold px-2.5 py-0.5 rounded-full text-xs shadow-xs">
@@ -423,33 +484,37 @@ export default function ProductsPage() {
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => handleOpenEditModal(product)} 
-                          className="h-7.5 w-7.5 text-slate-500 hover:text-sky-600 hover:bg-sky-50 dark:hover:bg-blue-950/20 transition-all rounded-lg"
-                          title="Ubah Produk"
-                        >
-                          <Edit className="h-4.5 w-4.5" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => handleDelete(product.id, product.name)} 
-                          className="h-7.5 w-7.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-red-950/20 transition-all rounded-lg"
-                          disabled={isDeletingId === product.id}
-                          title="Hapus Produk"
-                        >
-                          {isDeletingId === product.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4.5 w-4.5" />
+                    <RoleGate allowedRoles={["GUDANG", "PURCHASING", "SUPERADMIN"]} currentRole={currentRole}>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => handleOpenEditModal(product)} 
+                            className="h-7.5 w-7.5 text-slate-500 hover:text-sky-600 hover:bg-sky-50 dark:hover:bg-blue-950/20 transition-all rounded-lg"
+                            title="Ubah Produk"
+                          >
+                            <Edit className="h-4.5 w-4.5" />
+                          </Button>
+                          {!isPurchasing && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => handleDelete(product.id, product.name)} 
+                              className="h-7.5 w-7.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-red-950/20 transition-all rounded-lg"
+                              disabled={isDeletingId === product.id}
+                              title="Hapus Produk"
+                            >
+                              {isDeletingId === product.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4.5 w-4.5" />
+                              )}
+                            </Button>
                           )}
-                        </Button>
-                      </div>
-                    </TableCell>
+                        </div>
+                      </TableCell>
+                    </RoleGate>
                   </TableRow>
                 )
               })

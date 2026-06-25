@@ -303,7 +303,10 @@ export async function deleteProduct(id: string) {
     revalidatePath("/products");
     revalidatePath("/");
 
-    return { success: true, message: "Produk berhasil dihapus." };
+    return { 
+      success: true, 
+      message: "Produk berhasil dihapus." 
+    };
   } catch (error: any) {
     return { 
       success: false, 
@@ -313,3 +316,36 @@ export async function deleteProduct(id: string) {
     };
   }
 }
+
+/**
+ * Mengambil daftar produk dengan stok kritis (stok <= minStock)
+ */
+export async function getCriticalProducts() {
+  try {
+    await requireServerRole("PURCHASING", "SUPERADMIN", "MANAGER");
+
+    const products = await prisma.product.findMany({
+      include: {
+        category: true,
+        supplier: true
+      },
+      orderBy: {
+        stock: "asc"
+      }
+    });
+
+    const critical = products.filter(p => p.stock <= p.minStock);
+
+    return {
+      success: true,
+      data: critical.map(p => ({
+        ...p,
+        buyPrice: Number(p.buyPrice),
+        sellPrice: Number(p.sellPrice)
+      }))
+    };
+  } catch (error: any) {
+    return { success: false, message: error.message || "Gagal mengambil data stok kritis." };
+  }
+}
+

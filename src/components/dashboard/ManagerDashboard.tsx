@@ -29,6 +29,9 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 // Premium HSL Colors for Pie Chart
 const COLORS = ["#0D9488", "#8B5CF6", "#F59E0B", "#3B82F6", "#EF4444"];
@@ -69,10 +72,153 @@ export default function ManagerDashboard({ stats }: ManagerDashboardProps) {
 
   const handleExport = (type: "PDF" | "EXCEL") => {
     toast.info(`Mengekspor laporan ke format ${type}...`);
-    // Simulasi ekspor laporan
-    setTimeout(() => {
-      toast.success(`Laporan analisis keuangan berhasil diunduh (${type})!`);
-    }, 1500);
+    try {
+      if (type === "EXCEL") {
+        const financialSummary = [
+          { "Metrik Finansial": "Total Katalog Produk", "Nilai": stats.totalProducts },
+          { "Metrik Finansial": "Total Produk Minim Stok (Low Stock)", "Nilai": stats.lowStockCount },
+          { "Metrik Finansial": "Total Nilai Aset (Harga Jual)", "Nilai": formatCurrency(stats.totalAssetValue) },
+          { "Metrik Finansial": "Modal Tertanam (Harga Beli)", "Nilai": formatCurrency(stats.totalCapitalValue) },
+          { "Metrik Finansial": "Estimasi Keuntungan", "Nilai": formatCurrency(stats.estimatedProfit) },
+          { "Metrik Finansial": "Margin Keuntungan (%)", "Nilai": `${stats.profitMarginPercent}%` },
+        ];
+
+        const auditLogsData = stats.recentAuditLogs.map((log) => ({
+          "Waktu": log.time,
+          "Nama Karyawan": log.userName,
+          "Jabatan/Role": log.role,
+          "Aksi": log.action,
+          "Detail": log.details,
+        }));
+
+        const categoryData = stats.categoryComposition.map((cat) => ({
+          "Kategori Produk": cat.name,
+          "Persentase Sebaran (%)": `${cat.value}%`,
+        }));
+
+        const mutationData = stats.mutationTrend.map((t) => ({
+          "Hari/Tanggal": t.name,
+          "Barang Masuk (IN)": t.IN,
+          "Barang Keluar (OUT)": t.OUT,
+        }));
+
+        const workbook = XLSX.utils.book_new();
+
+        const summarySheet = XLSX.utils.json_to_sheet(financialSummary);
+        XLSX.utils.book_append_sheet(workbook, summarySheet, "Ringkasan Finansial");
+
+        const categorySheet = XLSX.utils.json_to_sheet(categoryData);
+        XLSX.utils.book_append_sheet(workbook, categorySheet, "Sebaran Kategori");
+
+        const mutationSheet = XLSX.utils.json_to_sheet(mutationData);
+        XLSX.utils.book_append_sheet(workbook, mutationSheet, "Tren Mutasi Stok");
+
+        const auditSheet = XLSX.utils.json_to_sheet(auditLogsData);
+        XLSX.utils.book_append_sheet(workbook, auditSheet, "Audit Trail");
+
+        const dateStr = new Date().toISOString().slice(0, 10);
+        XLSX.writeFile(workbook, `Laporan_Dashboard_Manager_${dateStr}.xlsx`);
+        toast.success("Laporan Excel berhasil diunduh!");
+      } else {
+        // PDF Export
+        const doc = new jsPDF();
+        
+        // Judul & Header Laporan
+        doc.setFontSize(18);
+        doc.setTextColor(11, 19, 43); // #0B132B
+        doc.text("LAPORAN ANALISIS KEUANGAN & AUDIT TRAIL", 14, 15);
+        doc.setFontSize(10);
+        doc.setTextColor(100, 116, 139); // slate-500
+        doc.text(`Dicetak pada: ${new Date().toLocaleString("id-ID")}`, 14, 22);
+
+        // Seksi 1: Ringkasan Keuangan
+        doc.setFontSize(13);
+        doc.setTextColor(11, 19, 43);
+        doc.text("1. Ringkasan Finansial Makro", 14, 32);
+
+        const summaryColumns = ["Metrik Finansial", "Nilai (Rupiah / Persen / Unit)"];
+        const summaryRows = [
+          ["Total Katalog Produk", stats.totalProducts.toString()],
+          ["Stok Kritis (Low Stock)", stats.lowStockCount.toString()],
+          ["Total Nilai Aset (Harga Jual)", formatCurrency(stats.totalAssetValue)],
+          ["Modal Tertanam (Harga Beli)", formatCurrency(stats.totalCapitalValue)],
+          ["Estimasi Keuntungan", formatCurrency(stats.estimatedProfit)],
+          ["Margin Keuntungan", `+${stats.profitMarginPercent}%`],
+        ];
+
+        autoTable(doc, {
+          head: [summaryColumns],
+          body: summaryRows,
+          startY: 36,
+          theme: 'grid',
+          headStyles: { fillColor: [13, 148, 136] }, // teal-600
+          styles: { fontSize: 9.5, cellPadding: 2.5 },
+        });
+
+        // Seksi 2: Komposisi Kategori Produk
+        let currentY = (doc as any).lastAutoTable.finalY + 10;
+        doc.setFontSize(13);
+        doc.setTextColor(11, 19, 43);
+        doc.text("2. Komposisi Kategori Produk", 14, currentY);
+
+        const categoryColumns = ["Kategori Produk", "Persentase Sebaran (%)"];
+        const categoryRows = stats.categoryComposition.map(cat => [cat.name, `${cat.value}%`]);
+
+        autoTable(doc, {
+          head: [categoryColumns],
+          body: categoryRows,
+          startY: currentY + 4,
+          theme: 'grid',
+          headStyles: { fillColor: [139, 92, 246] }, // violet-500
+          styles: { fontSize: 9, cellPadding: 2.5 },
+        });
+
+        // Seksi 3: Audit Trail / Log Aktivitas
+        currentY = (doc as any).lastAutoTable.finalY + 10;
+        
+        // Cek jika butuh halaman baru
+        if (currentY > 210) {
+          doc.addPage();
+          currentY = 15;
+        }
+
+        doc.setFontSize(13);
+        doc.setTextColor(11, 19, 43);
+        doc.text("3. Audit Trail - Riwayat Aktivitas Karyawan", 14, currentY);
+
+        const auditColumns = ["Waktu", "Nama Karyawan", "Role", "Aksi", "Detail"];
+        const auditRows = stats.recentAuditLogs.map(log => [
+          log.time,
+          log.userName,
+          log.role,
+          log.action,
+          log.details,
+        ]);
+
+        autoTable(doc, {
+          head: [auditColumns],
+          body: auditRows,
+          startY: currentY + 4,
+          theme: 'grid',
+          headStyles: { fillColor: [15, 23, 42] }, // slate-900
+          styles: { fontSize: 8, cellPadding: 2 },
+          columnStyles: {
+            0: { cellWidth: 25 },
+            1: { cellWidth: 32 },
+            2: { cellWidth: 20 },
+            3: { cellWidth: 28 },
+            4: { cellWidth: 77 },
+          }
+        });
+
+        const dateStr = new Date().toISOString().slice(0, 10);
+        doc.save(`Laporan_Dashboard_Manager_${dateStr}.pdf`);
+        toast.success("Laporan PDF berhasil diunduh!");
+      }
+    } catch (error: any) {
+      console.error("Export Error:", error);
+      toast.error(`Gagal mengekspor laporan: ${error.message || error}`);
+    }
   };
 
   const formatCurrency = (val: number) => {

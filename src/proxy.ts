@@ -48,9 +48,9 @@ export async function proxy(request: NextRequest) {
     const { payload } = await jwtVerify(session, key, { algorithms: ["HS256"] });
     const userRole = payload.role as string;
 
-    // Jika user sudah login dan mencoba membuka halaman login/register
+    // Jika user sudah login dan mencoba membuka halaman login/register, biarkan tetap terbuka agar bisa multi-login/re-login di tab lain
     if (isAuthPage) {
-      return NextResponse.redirect(new URL('/', request.url))
+      return NextResponse.next();
     }
 
     // 4. Cari apakah ada kecocokan aturan rute RBAC

@@ -2,6 +2,7 @@ import { getSession } from "@/lib/auth";
 import { getPendingPurchaseOrders, createPurchaseOrder } from "@/app/actions/purchase-order";
 import { prisma } from "@/lib/db";
 import POApprovalTable from "@/components/po/POApprovalTable";
+import OfficialPOForm from "@/components/po/OfficialPOForm";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText, PlusCircle, AlertCircle, ShoppingCart } from "lucide-react";
 import { redirect } from "next/navigation";
@@ -36,8 +37,13 @@ export default async function PurchaseOrdersPage({ searchParams }: PageProps) {
 
   // Fetch products list for dropdown
   const products = await prisma.product.findMany({
-    select: { id: true, name: true, sku: true }
+    select: { id: true, name: true, sku: true, buyPrice: true, supplierId: true }
   });
+
+  const serializedProducts = products.map((p) => ({
+    ...p,
+    buyPrice: Number(p.buyPrice)
+  }));
 
   // Jika belum ada supplier di database, buatkan satu otomatis untuk testing
   let activeSuppliers = suppliers;
@@ -86,95 +92,12 @@ export default async function PurchaseOrdersPage({ searchParams }: PageProps) {
 
       {/* Grid: Form Pembuatan PO (Hanya PURCHASING / SUPERADMIN) */}
       {isPurchasingOrAdmin && (
-        <Card className="border border-white/40 bg-white/60 dark:bg-zinc-900/60 backdrop-blur-md rounded-2xl shadow-sm max-w-xl">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-bold text-[#0B132B] flex items-center gap-2">
-              <PlusCircle className="h-5 w-5 text-indigo-600" />
-              Ajukan Purchase Order Baru (Testing)
-            </CardTitle>
-            <CardDescription className="text-slate-500 text-xs">
-              Simulasi pengisian dokumen PO oleh staf purchasing untuk dikirim ke antrean persetujuan Manager.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form action={handleCreatePO} className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                {/* Pilih Supplier */}
-                <div className="space-y-1.5">
-                  <label htmlFor="supplierId" className="text-xs font-bold text-slate-500">Pilih Supplier</label>
-                  <select
-                    id="supplierId"
-                    name="supplierId"
-                    className="w-full py-2.5 px-3 bg-white/80 dark:bg-zinc-950 border border-slate-200/80 dark:border-zinc-800 rounded-xl text-xs font-semibold text-slate-800 dark:text-zinc-200 outline-none cursor-pointer"
-                    defaultValue={defaultSupplierId}
-                    required
-                  >
-                    {activeSuppliers.map((sup) => (
-                      <option key={sup.id} value={sup.id}>{sup.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Total Biaya PO */}
-                <div className="space-y-1.5">
-                  <label htmlFor="amount" className="text-xs font-bold text-slate-500">Total Biaya PO (Rupiah)</label>
-                  <input
-                    id="amount"
-                    name="amount"
-                    type="number"
-                    min="1000"
-                    placeholder="Contoh: 12500000"
-                    className="w-full py-2.5 px-3 bg-white/80 dark:bg-zinc-950 border border-slate-200/80 dark:border-zinc-800 rounded-xl text-xs font-semibold text-slate-800 dark:text-zinc-200 outline-none"
-                    defaultValue={defaultAmount}
-                    required
-                  />
-                </div>
-
-                {/* Pilih Produk (Opsional / Terkait Restock) */}
-                <div className="space-y-1.5">
-                  <label htmlFor="productId" className="text-xs font-bold text-slate-500">Pilih Produk Restock (Opsional)</label>
-                  <select
-                    id="productId"
-                    name="productId"
-                    className="w-full py-2.5 px-3 bg-white/80 dark:bg-zinc-950 border border-slate-200/80 dark:border-zinc-800 rounded-xl text-xs font-semibold text-slate-800 dark:text-zinc-200 outline-none cursor-pointer"
-                    defaultValue={defaultProductId}
-                  >
-                    <option value="">-- Hubungkan dengan Produk --</option>
-                    {products.map((prod) => (
-                      <option key={prod.id} value={prod.id}>
-                        {prod.name} ({prod.sku})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Kuantitas Restock */}
-                <div className="space-y-1.5">
-                  <label htmlFor="quantity" className="text-xs font-bold text-slate-500">Kuantitas Restock</label>
-                  <input
-                    id="quantity"
-                    name="quantity"
-                    type="number"
-                    min="1"
-                    placeholder="Contoh: 50"
-                    className="w-full py-2.5 px-3 bg-white/80 dark:bg-zinc-950 border border-slate-200/80 dark:border-zinc-800 rounded-xl text-xs font-semibold text-slate-800 dark:text-zinc-200 outline-none"
-                    defaultValue={50}
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Tombol Kirim */}
-              <button
-                type="submit"
-                className="w-full py-2.5 px-4 bg-[#0B132B] hover:bg-[#1C2541] active:bg-[#0B132B] text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <ShoppingCart className="h-4 w-4 text-teal-400" />
-                Kirim Pengajuan PO
-              </button>
-            </form>
-          </CardContent>
-        </Card>
+        <OfficialPOForm 
+          suppliers={activeSuppliers}
+          products={serializedProducts}
+          defaultSupplierId={defaultSupplierId}
+          defaultProductId={defaultProductId}
+        />
       )}
 
       {/* Rincian Antrean Approval */}
