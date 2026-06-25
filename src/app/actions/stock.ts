@@ -119,3 +119,75 @@ export async function getStockMovements() {
     return { success: false, message: error.message || "Gagal mengambil riwayat mutasi stok" };
   }
 }
+
+/**
+ * Mengurangi stok barang (Stock Out) - Khusus GUDANG & SUPERADMIN
+ */
+export async function updateStockOut(productId: string, quantity: number) {
+  try {
+    if (quantity <= 0) {
+      return { success: false, message: "Kuantitas harus lebih dari 0" };
+    }
+
+    const session = await requireServerRole("GUDANG", "SUPERADMIN");
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Lock baris produk
+      const productRecords = await tx.$queryRaw<
+        { id: string; stock: number; minStock: number; name: string }[]
+      >`SELECT id, stock, "minStock", name FROM "Product" WHERE id = ${productId} FOR UPDATE`;
+
+      if (!productRecords || productRecords.length === 0) {
+        throw new Error("Produk tidak ditemukan.");
+      }
+
+      const product = productRecords[0];
+
+      // 2. Cek kecukupan stok
+      if (product.stock < quantity) {
+        throw new Error(`Stok tidak mencukupi untuk "${product.name}". Sisa stok: ${product.stock}`);
+      }
+
+      const newStock = product.stock - quantity;
+
+      // 3. Catat pergerakan stok (Mutasi OUT)
+      const movement = await tx.stockMovement.create({
+        data: {
+          productId,
+          type: "OUT",
+          quantity,
+          reason: "Pengurangan stok otomatis (Stock Out)",
+          userId: session.id,
+        },
+      });
+
+      // 4. Update stok pada produk
+      const updatedProduct = await tx.product.update({
+        where: { id: productId },
+        data: { stock: newStock },
+      });
+
+      // 5. Catat Audit Log
+      const isLowStock = newStock <= product.minStock;
+      const lowStockMsg = isLowStock ? ` [PERINGATAN: Stok di bawah batas minimum ${product.minStock}]` : "";
+      
+      await tx.auditLog.create({
+        data: {
+          userId: session.id,
+          action: "UPDATE_STOCK_OUT",
+          details: `Pengurangan stok barang "${product.name}" (${productId}) sebanyak ${quantity} unit. Sisa stok baru: ${newStock}.${lowStockMsg}`,
+        },
+      });
+
+      return { movement, updatedProduct, isLowStock, newStock };
+    });
+
+    revalidatePath("/movements");
+    revalidatePath("/products");
+    revalidatePath("/");
+    return { success: true, data: result };
+  } catch (error: any) {
+    return { success: false, message: error.message || "Terjadi kesalahan internal server." };
+  }
+}
+

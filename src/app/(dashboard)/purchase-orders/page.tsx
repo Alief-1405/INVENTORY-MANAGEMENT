@@ -7,11 +7,19 @@ import { FileText, PlusCircle, AlertCircle, ShoppingCart } from "lucide-react";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
-export default async function PurchaseOrdersPage() {
+interface PageProps {
+  searchParams: Promise<{ supplierId?: string; amount?: string }>;
+}
+
+export default async function PurchaseOrdersPage({ searchParams }: PageProps) {
   const session = await getSession();
   if (!session) {
     redirect("/login");
   }
+
+  const resolvedParams = await searchParams;
+  const defaultSupplierId = resolvedParams.supplierId || "";
+  const defaultAmount = resolvedParams.amount || "";
 
   const userRole = session.role;
   const isPurchasingOrAdmin = userRole === "PURCHASING" || userRole === "SUPERADMIN";
@@ -89,6 +97,7 @@ export default async function PurchaseOrdersPage() {
                     id="supplierId"
                     name="supplierId"
                     className="w-full py-2.5 px-3 bg-white/80 dark:bg-zinc-950 border border-slate-200/80 dark:border-zinc-800 rounded-xl text-xs font-semibold text-slate-800 dark:text-zinc-200 outline-none cursor-pointer"
+                    defaultValue={defaultSupplierId}
                     required
                   >
                     {activeSuppliers.map((sup) => (
@@ -107,6 +116,7 @@ export default async function PurchaseOrdersPage() {
                     min="1000"
                     placeholder="Contoh: 12500000"
                     className="w-full py-2.5 px-3 bg-white/80 dark:bg-zinc-950 border border-slate-200/80 dark:border-zinc-800 rounded-xl text-xs font-semibold text-slate-800 dark:text-zinc-200 outline-none"
+                    defaultValue={defaultAmount}
                     required
                   />
                 </div>

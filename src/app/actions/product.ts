@@ -39,7 +39,7 @@ export async function getDashboardStats() {
     const totalProducts = await prisma.product.count();
     
     const products = await prisma.product.findMany({
-      select: { id: true, name: true, sku: true, stock: true, minStock: true, buyPrice: true, sellPrice: true }
+      select: { id: true, name: true, sku: true, stock: true, minStock: true, buyPrice: true, sellPrice: true, supplierId: true }
     });
 
     const lowStockCount = products.filter(p => p.stock <= p.minStock).length;
