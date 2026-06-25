@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+enum MovementType {
+  IN
+  OUT
+  TRANSFER
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      Role     @default(STAFF)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  movements StockMovement[]
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  products    Product[]
+}
+
+model Supplier {
+  id          String    @id @default(uuid())
+  name        String
+  contactName String?
+  email       String?
+  phone       String?
+  address     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  products    Product[]
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  sku         String   @unique
+  name        String
+  description String?
+  imageUrl    String?
+  buyPrice    Decimal  @db.Decimal(10, 2)
+  sellPrice   Decimal  @db.Decimal(10, 2)
+  stock       Int      @default(0)
+  minStock    Int      @default(10) // Threshold untuk Low Stock Alert
+  
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  
+  supplierId  String?
+  supplier    Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  movements   StockMovement[]
+
+  @@index([sku])
+  @@index([name])
+}
+
+model StockMovement {
+  id          String       @id @default(uuid())
+  
+  productId   String
+  product     Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  type        MovementType
+  quantity    Int
+  reason      String?
+  
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  createdAt   DateTime     @default(now())
+
+  @@index([productId])
+  @@index([createdAt])
+  @@index([type])
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String?
+  updatedAt DateTime @updatedAt
+}
