@@ -6,6 +6,8 @@ import { z } from "zod";
 import { requireServerRole } from "@/lib/rbac";
 import { revalidatePath } from "next/cache";
 import { Role } from "@prisma/client";
+import { cookies } from "next/headers";
+import { encrypt, getSession } from "@/lib/auth";
 
 const userSchema = z.object({
   name: z.string().min(3, "Nama minimal 3 karakter"),
@@ -177,5 +179,82 @@ export async function toggleUserStatus(userId: string) {
     return { success: true, data: { isActive: newStatus } };
   } catch (error: any) {
     return { success: false, message: error.message || "Gagal mengubah status akun." };
+  }
+}
+
+/**
+ * Memperbarui info profil personal pengguna (Nama dan Email)
+ */
+export async function updateProfile(data: { name: string; email: string }) {
+  try {
+    const session = await getSession();
+    if (!session || !session.id) {
+      return { success: false, message: "Akses ditolak. Silakan login kembali." };
+    }
+
+    if (!data.name || data.name.trim().length < 3) {
+      return { success: false, message: "Nama lengkap minimal 3 karakter." };
+    }
+    if (!data.email || !data.email.includes("@")) {
+      return { success: false, message: "Format email tidak valid." };
+    }
+
+    const name = data.name.trim();
+    const email = data.email.trim();
+
+    // Cek keunikan email selain milik user itu sendiri
+    const emailExists = await prisma.user.findFirst({
+      where: {
+        email,
+        NOT: { id: session.id },
+      },
+    });
+
+    if (emailExists) {
+      return { success: false, message: "Email sudah digunakan oleh pengguna lain." };
+    }
+
+    // Update database
+    const updatedUser = await prisma.user.update({
+      where: { id: session.id },
+      data: { name, email },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+      },
+    });
+
+    // Enkripsi session baru & pasang di cookie
+    const sessionData = {
+      id: updatedUser.id,
+      email: updatedUser.email,
+      name: updatedUser.name,
+      role: updatedUser.role,
+    };
+
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const sessionToken = await encrypt(sessionData);
+
+    const cookieStore = await cookies();
+    cookieStore.set("session", sessionToken, {
+      expires,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+    });
+
+    // Revalidasi agar layout memuat nama profil baru
+    revalidatePath("/", "layout");
+
+    return { 
+      success: true, 
+      message: "Profil berhasil diperbarui.", 
+      data: updatedUser 
+    };
+  } catch (error: any) {
+    return { success: false, message: error.message || "Gagal memperbarui profil." };
   }
 }

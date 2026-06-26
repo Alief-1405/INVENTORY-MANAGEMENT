@@ -236,3 +236,10 @@ model PurchaseOrderItem {
   @@index([purchaseOrderId])
   @@index([productId])
 }
+
+model AppConfig {
+  id          String   @id @default(uuid())
+  companyName String   @default("Sistem Inventaris")
+  updatedAt   DateTime @updatedAt
+}
+

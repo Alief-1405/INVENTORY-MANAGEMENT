@@ -7,7 +7,15 @@ import { logoutUser } from "@/app/actions/auth"
 import { LogOut, Settings, User } from "lucide-react"
 import { toast } from "sonner"
 
-export function Header({ userName = "User" }: { userName?: string }) {
+export function Header({ 
+  userName = "User", 
+  userRole, 
+  companyName = "Sistem Inventaris" 
+}: { 
+  userName?: string;
+  userRole?: string;
+  companyName?: string;
+}) {
   const router = useRouter()
   const [showDropdown, setShowDropdown] = useState(false)
 
@@ -20,19 +28,37 @@ export function Header({ userName = "User" }: { userName?: string }) {
 
   const initials = userName
     .split(" ")
+    .filter(Boolean)
     .map(n => n[0])
     .join("")
     .substring(0, 2)
     .toUpperCase()
 
+  const roleLabels: Record<string, string> = {
+    SUPERADMIN: "Superadmin",
+    MANAGER: "Manager",
+    GUDANG: "Staff Gudang",
+    PURCHASING: "Staff Purchasing",
+    SALES: "Staff Sales",
+  }
+
+  const roleLabel = userRole ? roleLabels[userRole] || userRole : ""
+
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center border-b border-slate-200/80 bg-white/80 px-6 dark:bg-zinc-950/80 backdrop-blur-md">
       <div className="flex flex-1 items-center justify-between relative">
-        <h1 className="text-lg font-bold tracking-tight text-zinc-950 dark:text-zinc-50">Sistem Inventaris</h1>
+        <h1 className="text-lg font-bold tracking-tight text-zinc-950 dark:text-zinc-50">{companyName}</h1>
         
         {/* Profile Area */}
         <div className="flex items-center gap-4">
-          <span className="text-sm font-semibold text-slate-500 dark:text-zinc-400">{userName}</span>
+          <div className="flex flex-col text-right">
+            <span className="text-sm font-semibold text-slate-800 dark:text-zinc-200 leading-tight">{userName}</span>
+            {roleLabel && (
+              <span className="text-xs text-slate-500 dark:text-zinc-400 font-medium">
+                {roleLabel}
+              </span>
+            )}
+          </div>
           
           {/* Avatar with Shiny Gradient Ring */}
           <div 
@@ -58,6 +84,9 @@ export function Header({ userName = "User" }: { userName?: string }) {
                 <div className="px-3 py-2 border-b border-slate-100 dark:border-zinc-900">
                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Akun Aktif</p>
                   <p className="text-sm font-bold text-slate-800 dark:text-zinc-200 truncate">{userName}</p>
+                  {roleLabel && (
+                    <p className="text-xs font-semibold text-slate-500 dark:text-zinc-400 truncate">{roleLabel}</p>
+                  )}
                 </div>
                 <div className="py-1.5 space-y-0.5">
                   <Link 
