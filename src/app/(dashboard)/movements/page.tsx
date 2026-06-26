@@ -392,23 +392,57 @@ export default function MovementsPage() {
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="productId" className="text-xs font-bold text-slate-500 uppercase tracking-wide">Pilih Produk</Label>
-                    <Select onValueChange={(val) => form.setValue("productId", val as string)} defaultValue={(form.getValues("productId") || "") as string}>
+                    <Select value={form.watch("productId") || undefined} onValueChange={(val) => form.setValue("productId", val as string)}>
                       <SelectTrigger className="bg-white/80 dark:bg-zinc-950 border-slate-200/80 rounded-xl text-xs font-semibold">
-                        <SelectValue placeholder="-- Pilih Produk --" />
+                        <span className="flex flex-1 text-left truncate" data-slot="select-value">
+                          {form.watch("productId") && products.find((p: any) => p.id === form.watch("productId"))
+                            ? `[${products.find((p: any) => p.id === form.watch("productId"))?.sku}] - ${products.find((p: any) => p.id === form.watch("productId"))?.name}`
+                            : <span className="text-slate-500">-- Pilih Produk --</span>}
+                        </span>
                       </SelectTrigger>
                       <SelectContent>
                         {products.map((p: any) => (
                           <SelectItem key={p.id} value={p.id}>
-                            {p.name} (SKU: {p.sku}) — Stok: {p.stock}
+                            {`[${p.sku}] - ${p.name}`}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
 
+                  <div className="p-3 bg-slate-50 dark:bg-zinc-900/50 rounded-xl border border-slate-100 dark:border-zinc-800 text-xs">
+                    {(() => {
+                      const selectedProductId = form.watch("productId");
+                      const selectedProduct = products.find((p: any) => p.id === selectedProductId);
+                      if (selectedProduct) {
+                        return (
+                          <div className="space-y-1 text-slate-700 dark:text-zinc-300">
+                            <div className="flex justify-between">
+                              <span className="font-semibold text-slate-500">SKU:</span>
+                              <span className="font-bold">{selectedProduct.sku}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="font-semibold text-slate-500">Nama Produk:</span>
+                              <span className="font-bold">{selectedProduct.name}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="font-semibold text-slate-500">Stok Saat Ini:</span>
+                              <span className="font-bold text-indigo-600 dark:text-indigo-400">{selectedProduct.stock}</span>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="text-center text-slate-400 italic py-1">
+                          Silakan pilih produk
+                        </div>
+                      );
+                    })()}
+                  </div>
+
                   <div className="space-y-1.5">
                     <Label htmlFor="type" className="text-xs font-bold text-slate-500 uppercase tracking-wide">Jenis Mutasi</Label>
-                    <Select onValueChange={(val: any) => form.setValue("type", val)} defaultValue={form.getValues("type")}>
+                    <Select value={form.watch("type")} onValueChange={(val: any) => form.setValue("type", val)}>
                       <SelectTrigger className="bg-white/80 dark:bg-zinc-950 border-slate-200/80 rounded-xl text-xs font-semibold">
                         <SelectValue placeholder="-- Tipe --" />
                       </SelectTrigger>
