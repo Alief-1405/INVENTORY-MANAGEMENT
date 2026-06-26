@@ -114,11 +114,22 @@ export async function getSalesOrderDetailsByNo(soNumber: string) {
     return { 
       success: true, 
       data: {
-        ...so,
+        id: so.id,
+        soNumber: so.soNumber,
+        customerName: so.customerName,
+        status: so.status,
+        paymentMethod: so.paymentMethod,
+        notes: so.notes,
+        productId: so.productId,
+        quantity: so.quantity,
+        totalPrice: Number(so.totalPrice),
+        createdById: so.createdById,
         createdAt: so.createdAt.toISOString(),
         updatedAt: so.updatedAt.toISOString(),
+        product: so.product,
+        createdBy: so.createdBy,
         deliveryOrder: so.deliveryOrder ? {
-          ...so.deliveryOrder,
+          doNumber: so.deliveryOrder.doNumber,
           createdAt: so.deliveryOrder.createdAt.toISOString()
         } : null
       } 
@@ -367,4 +378,89 @@ export async function cancelOrderByWarehouse(soId: string) {
     return { success: false, message: error.message || "Gagal membatalkan Sales Order." };
   }
 }
+
+/**
+ * Mengambil daftar antrean SO untuk Dispatch berdasarkan status filter dan kata kunci pencarian
+ */
+export async function getDispatchQueue(statusFilter: "BELUM_DO" | "SUDAH_DO" | "BATAL", searchQuery?: string) {
+  try {
+    await requireServerRole("GUDANG", "SUPERADMIN");
+
+    const whereClause: any = {};
+
+    // 1. Filter Status
+    if (statusFilter === "BELUM_DO") {
+      whereClause.status = { in: ["PAID", "PENDING_PAYMENT"] };
+    } else if (statusFilter === "SUDAH_DO") {
+      whereClause.status = "DONE";
+    } else if (statusFilter === "BATAL") {
+      whereClause.status = "CANCELLED";
+    }
+
+    // 2. Filter Pencarian Nomor SO
+    if (searchQuery && searchQuery.trim() !== "") {
+      whereClause.soNumber = {
+        contains: searchQuery.trim(),
+        mode: "insensitive",
+      };
+    }
+
+    // 3. Urutan FIFO untuk antrean Belum DO (terlama ke terbaru), dan LIFO untuk histori
+    const orderByClause = statusFilter === "BELUM_DO"
+      ? { createdAt: "asc" as const }
+      : { createdAt: "desc" as const };
+
+    const queue = await prisma.salesOrder.findMany({
+      where: whereClause,
+      include: {
+        product: {
+          select: {
+            name: true,
+            sku: true,
+            stock: true,
+          },
+        },
+        createdBy: {
+          select: {
+            name: true,
+          },
+        },
+        deliveryOrder: {
+          select: {
+            doNumber: true,
+            createdAt: true,
+          },
+        },
+      },
+      orderBy: orderByClause,
+    });
+
+    return {
+      success: true,
+      data: queue.map((item) => ({
+        id: item.id,
+        soNumber: item.soNumber,
+        customerName: item.customerName,
+        status: item.status,
+        paymentMethod: item.paymentMethod,
+        notes: item.notes,
+        productId: item.productId,
+        quantity: item.quantity,
+        totalPrice: Number(item.totalPrice),
+        createdById: item.createdById,
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+        product: item.product,
+        createdBy: item.createdBy,
+        deliveryOrder: item.deliveryOrder ? {
+          doNumber: item.deliveryOrder.doNumber,
+          createdAt: item.deliveryOrder.createdAt.toISOString(),
+        } : null,
+      })),
+    };
+  } catch (error: any) {
+    return { success: false, message: error.message || "Gagal mengambil data antrean SO." };
+  }
+}
+
 
